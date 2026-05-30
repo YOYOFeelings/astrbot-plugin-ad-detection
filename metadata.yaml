@@ -1,15 +1,6 @@
 name: astrbot_plugin_ad_detection
-version: 1.0.0
-author: AstrBot
-description: AstrBot QQ群广告检测插件，支持文本正则/AI检测、图片OCR检测
-dependencies:
-  - none
-platforms:
-  - qq
-type: 2
-pypi:
-  - sqlalchemy
-  - easyocr
-  - pillow
-  - numpy
-  - requests
+display_name: 广告检测插件
+desc: AstrBot QQ群广告检测插件，支持正则、AI、OCR图片检测
+version: v1.0.0
+author: 孤独的感情
+repo: https://github.com/YOYOFeelings/astrbot-plugin-ad-detection
