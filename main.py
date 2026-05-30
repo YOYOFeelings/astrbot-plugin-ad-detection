@@ -278,12 +278,12 @@ class AdDetection(Star):
         return False, "", ""
 
     async def _handle_violation(self, event: AstrMessageEvent, reason: str, detection_type: str):
-        """处理违规消息 - 使用 yield 返回结果"""
+        """处理违规消息 - 返回警告消息内容"""
         user_id = str(event.get_sender_id()) if event.get_sender_id() else ""
         group_id = event.get_group_id() or ""
 
         if not group_id or not user_id:
-            return
+            return None
 
         logger.info(f"[广告检测] 处理违规: 用户={user_id}, 原因={reason}")
 
@@ -293,11 +293,11 @@ class AdDetection(Star):
         if self._get_config("enable_withdraw", True):
             await self._recall_message(event)
 
-        # 发送警告
+        # 准备警告消息
         if self._get_config("enable_warn", True):
             warn_msg = self._get_config("warn_message", "检测到您发送了广告内容，请遵守群规！")
             full_msg = f"{warn_msg}\n违规原因：{reason}\n当前违规次数：{violation.violation_count}"
-            yield event.plain_result(full_msg)
+            return full_msg
 
         # 踢出群
         if self._get_config("enable_kick", False):
@@ -308,6 +308,8 @@ class AdDetection(Star):
                     logger.info(f"[广告检测] 用户已被踢出")
                 except Exception as e:
                     logger.warning(f"[广告检测] 踢出失败: {e}")
+
+        return None
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     async def on_group_message(self, event: AstrMessageEvent):
@@ -322,7 +324,9 @@ class AdDetection(Star):
 
             is_ad, reason, detection_type = await self._detect_ad(event)
             if is_ad:
-                yield from self._handle_violation(event, reason, detection_type)
+                warn_text = await self._handle_violation(event, reason, detection_type)
+                if warn_text:
+                    yield event.plain_result(warn_text)
         except Exception as e:
             logger.error(f"处理消息失败: {e}", exc_info=True)
 
