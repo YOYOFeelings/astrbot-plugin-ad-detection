@@ -1,0 +1,11 @@
+name: astrbot-plugin-ad-detection
+version: 0.1.0
+author: AstrBot
+description: Astrbot QQ群广告检测插件
+dependencies:
+  - none
+platforms:
+  - qq
+type: 2
+pypi:
+  - sqlalchemy
