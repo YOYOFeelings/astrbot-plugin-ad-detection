@@ -1,7 +1,7 @@
 name: astrbot-plugin-ad-detection
-version: 0.1.0
+version: 1.0.0
 author: AstrBot
-description: Astrbot QQ群广告检测插件
+description: AstrBot QQ群广告检测插件，支持文本正则/AI检测、图片OCR检测
 dependencies:
   - none
 platforms:
@@ -9,3 +9,7 @@ platforms:
 type: 2
 pypi:
   - sqlalchemy
+  - easyocr
+  - pillow
+  - numpy
+  - requests

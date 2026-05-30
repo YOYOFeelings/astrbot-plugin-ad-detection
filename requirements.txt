@@ -1,1 +1,5 @@
 sqlalchemy
+easyocr
+pillow
+numpy
+requests
