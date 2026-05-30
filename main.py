@@ -117,7 +117,6 @@ class AdDetection(Star):
         """安全获取配置值"""
         try:
             value = self.config.get(key)
-            logger.info(f"[广告检测] 读取配置 {key}: {value}")
             return value if value is not None else default
         except Exception as e:
             logger.warning(f"[广告检测] 读取配置 {key} 失败: {e}")
@@ -127,7 +126,6 @@ class AdDetection(Star):
         """通过配置的QQ号判断是否为管理员"""
         admin_qqs = self._get_config("admin_qqs", [])
         if not admin_qqs:
-            logger.warning("[广告检测] 未配置管理员QQ号")
             return False
         return str(user_id) in [str(qq) for qq in admin_qqs]
 
@@ -195,6 +193,33 @@ class AdDetection(Star):
             logger.warning(f"AI检测失败: {e}")
             return False, ""
 
+    async def _recall_message(self, event: AstrMessageEvent):
+        """撤回消息"""
+        try:
+            # 获取消息ID
+            message_id = None
+            if hasattr(event.message_obj, 'raw_message'):
+                raw_msg = event.message_obj.raw_message
+                if isinstance(raw_msg, dict):
+                    message_id = raw_msg.get('message_id')
+            
+            if not message_id:
+                logger.warning("[广告检测] 无法获取消息ID，无法撤回")
+                return False
+
+            # 获取平台适配器
+            platform = self.context.platform
+            if hasattr(platform, 'recall') and callable(platform.recall):
+                await platform.recall(message_id=message_id)
+                logger.info(f"[广告检测] 消息已撤回，ID: {message_id}")
+                return True
+            else:
+                logger.warning("[广告检测] 当前平台不支持消息撤回")
+                return False
+        except Exception as e:
+            logger.warning(f"[广告检测] 撤回消息失败: {e}")
+            return False
+
     async def _detect_ad(self, event: AstrMessageEvent) -> tuple[bool, str, str]:
         """检测消息是否为广告"""
         regex_rules = self._get_config("regex_rules", [])
@@ -203,7 +228,6 @@ class AdDetection(Star):
         user_id = str(event.get_sender_id()) if event.get_sender_id() else ""
 
         logger.info(f"[广告检测] 收到消息: {message_str}, 发送者: {user_id}, 群: {group_id}")
-        logger.info(f"[广告检测] 正则规则: {regex_rules}")
 
         # 管理员白名单跳过检测
         admin_qqs = self._get_config("admin_qqs", [])
@@ -265,11 +289,14 @@ class AdDetection(Star):
 
         violation = self.db.add_violation(user_id, group_id)
 
+        # 撤回消息
+        if self._get_config("enable_withdraw", True):
+            await self._recall_message(event)
+
         # 发送警告
         if self._get_config("enable_warn", True):
             warn_msg = self._get_config("warn_message", "检测到您发送了广告内容，请遵守群规！")
             full_msg = f"{warn_msg}\n违规原因：{reason}\n当前违规次数：{violation.violation_count}"
-            logger.info(f"[广告检测] 发送警告: {full_msg}")
             yield event.plain_result(full_msg)
 
         # 踢出群
