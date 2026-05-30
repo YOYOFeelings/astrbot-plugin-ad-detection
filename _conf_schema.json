@@ -1,92 +1,76 @@
 {
-  "title": "广告检测插件配置",
-  "type": "object",
-  "properties": {
-    "enable_regex_detection": {
-      "title": "启用正则检测",
-      "description": "开启后使用正则表达式检测广告",
-      "type": "boolean",
-      "default": true
-    },
-    "enable_text_ai_detection": {
-      "title": "启用AI检测",
-      "description": "开启后使用AI检测文本和图片广告（需配置AI提供商）",
-      "type": "boolean",
-      "default": false
-    },
-    "enable_image_detection": {
-      "title": "启用图片检测",
-      "description": "开启后检测图片中的广告内容（需启用AI检测）",
-      "type": "boolean",
-      "default": true
-    },
-    "enable_quote_detection": {
-      "title": "启用引用消息检测",
-      "description": "开启后同时检测引用的消息",
-      "type": "boolean",
-      "default": false
-    },
-    "enable_withdraw": {
-      "title": "启用撤回",
-      "description": "检测到广告后自动撤回消息",
-      "type": "boolean",
-      "default": true
-    },
-    "enable_warn": {
-      "title": "启用警告",
-      "description": "检测到广告后发送警告消息",
-      "type": "boolean",
-      "default": true
-    },
-    "enable_kick": {
-      "title": "启用踢出",
-      "description": "违规次数达到阈值后踢出用户",
-      "type": "boolean",
-      "default": false
-    },
-    "ai_provider": {
-      "title": "AI提供商",
-      "description": "选择用于广告检测的AI提供商",
-      "type": "string",
-      "_special": "select_provider"
-    },
-    "regex_rules": {
-      "title": "正则检测规则",
-      "description": "用于检测广告的正则表达式列表",
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": [
-        "加微信",
-        "加vx",
-        "加v",
-        "扫码",
-        "二维码",
-        "广告",
-        "推广",
-        "引流",
-        "福利",
-        "返利",
-        "兼职",
-        "赚钱",
-        "扫码进群",
-        "加群",
-        "微信扫码"
-      ]
-    },
-    "warn_threshold": {
-      "title": "警告阈值",
-      "description": "达到此违规次数后触发踢出（需启用踢出功能）",
-      "type": "integer",
-      "default": 3
-    },
-    "warn_message": {
-      "title": "警告消息",
-      "description": "检测到广告后发送的警告内容",
-      "type": "string",
-      "default": "检测到您发送了广告内容，请遵守群规！"
-    }
+  "enable_regex_detection": {
+    "description": "开启后使用正则表达式检测广告",
+    "type": "boolean",
+    "default": true
   },
-  "required": []
+  "enable_text_ai_detection": {
+    "description": "开启后使用AI检测文本和图片广告（需配置AI提供商）",
+    "type": "boolean",
+    "default": false
+  },
+  "enable_image_detection": {
+    "description": "开启后检测图片中的广告内容（需启用AI检测）",
+    "type": "boolean",
+    "default": true
+  },
+  "enable_quote_detection": {
+    "description": "开启后同时检测引用的消息",
+    "type": "boolean",
+    "default": false
+  },
+  "enable_withdraw": {
+    "description": "检测到广告后自动撤回消息",
+    "type": "boolean",
+    "default": true
+  },
+  "enable_warn": {
+    "description": "检测到广告后发送警告消息",
+    "type": "boolean",
+    "default": true
+  },
+  "enable_kick": {
+    "description": "违规次数达到阈值后踢出用户",
+    "type": "boolean",
+    "default": false
+  },
+  "ai_provider": {
+    "description": "选择用于广告检测的AI提供商",
+    "type": "string",
+    "_special": "select_provider"
+  },
+  "regex_rules": {
+    "description": "用于检测广告的正则表达式列表",
+    "type": "array",
+    "items": {
+      "type": "string"
+    },
+    "default": [
+      "加微信",
+      "加vx",
+      "加v",
+      "扫码",
+      "二维码",
+      "广告",
+      "推广",
+      "引流",
+      "福利",
+      "返利",
+      "兼职",
+      "赚钱",
+      "扫码进群",
+      "加群",
+      "微信扫码"
+    ]
+  },
+  "warn_threshold": {
+    "description": "达到此违规次数后触发踢出（需启用踢出功能）",
+    "type": "integer",
+    "default": 3
+  },
+  "warn_message": {
+    "description": "检测到广告后发送的警告内容",
+    "type": "string",
+    "default": "检测到您发送了广告内容，请遵守群规！"
+  }
 }
