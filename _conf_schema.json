@@ -1,73 +1,117 @@
+
 {
-  "enable_regex_detection": {
-    "description": "开启后使用正则表达式检测广告",
-    "type": "bool",
-    "default": true
+  "basic": {
+    "description": "基础设置",
+    "type": "object",
+    "hint": "广告检测插件的基础配置项",
+    "items": {
+      "group_list_mode": {
+        "description": "群聊权限模式",
+        "type": "string",
+        "options": [
+          "whitelist",
+          "blacklist",
+          "none"
+        ],
+        "default": "none",
+        "hint": "决定哪些群可以使用广告检测功能。whitelist=只允许白名单群；blacklist=屏蔽黑名单群；none=所有群都启用"
+      },
+      "group_list": {
+        "type": "list",
+        "description": "群聊白/黑名单列表",
+        "default": [],
+        "hint": "要填的群列表。可以填完整会话ID或只填群号",
+        "items": {
+          "type": "string"
+        }
+      },
+      "enable_regex_detection": {
+        "type": "bool",
+        "description": "启用正则检测",
+        "default": true,
+        "hint": "开启后会使用正则表达式匹配广告内容"
+      },
+      "enable_quote_detection": {
+        "type": "bool",
+        "description": "启用引用消息检测",
+        "default": false,
+        "hint": "开启后会检测引用的消息内容"
+      },
+      "enable_image_detection": {
+        "type": "bool",
+        "description": "启用图片检测",
+        "default": false,
+        "hint": "开启后会使用AI检测图片内容"
+      },
+      "regex_rules": {
+        "type": "list",
+        "description": "正则表达式检测规则",
+        "default": [
+          "加群|加v|加V|加微信",
+          "兼职|赚钱|外宣|外快|赚米",
+          "扫码|二维码|代刷|代做",
+          "免费领|免费送|限时免费",
+          "低价|特价|优惠|促销",
+          "联系.*微信|微信.*联系",
+          "qq.*群|群.*qq",
+          "出售|转让|代购",
+          "代理|加盟|招商",
+          "招.*人|人.*招",
+          "免费.*进",
+          "福利.*进",
+          "进.*群",
+          "vx.*群|群.*vx",
+          "v.*群|群.*v",
+          "微信.*群|群.*微信"
+        ],
+        "hint": "用于检测广告的正则表达式列表",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
   },
-  "enable_text_ai_detection": {
-    "description": "开启后使用AI检测文本和图片广告（需配置AI提供商）",
-    "type": "bool",
-    "default": false
-  },
-  "enable_image_detection": {
-    "description": "开启后检测图片中的广告内容（需启用AI检测）",
-    "type": "bool",
-    "default": true
-  },
-  "enable_quote_detection": {
-    "description": "开启后同时检测引用的消息",
-    "type": "bool",
-    "default": false
-  },
-  "enable_withdraw": {
-    "description": "检测到广告后自动撤回消息",
-    "type": "bool",
-    "default": true
-  },
-  "enable_warn": {
-    "description": "检测到广告后发送警告消息",
-    "type": "bool",
-    "default": true
-  },
-  "enable_kick": {
-    "description": "违规次数达到阈值后踢出用户",
-    "type": "bool",
-    "default": false
-  },
-  "ai_provider": {
-    "description": "选择用于广告检测的AI提供商",
-    "type": "string",
-    "_special": "select_provider"
-  },
-  "regex_rules": {
-    "description": "用于检测广告的正则表达式列表",
-    "type": "list",
-    "default": [
-      "加微信",
-      "加vx",
-      "加v",
-      "扫码",
-      "二维码",
-      "广告",
-      "推广",
-      "引流",
-      "福利",
-      "返利",
-      "兼职",
-      "赚钱",
-      "扫码进群",
-      "加群",
-      "微信扫码"
-    ]
-  },
-  "warn_threshold": {
-    "description": "达到此违规次数后触发踢出（需启用踢出功能）",
-    "type": "int",
-    "default": 3
-  },
-  "warn_message": {
-    "description": "检测到广告后发送的警告内容",
-    "type": "string",
-    "default": "检测到您发送了广告内容，请遵守群规！"
+  "action": {
+    "description": "处罚设置",
+    "type": "object",
+    "hint": "检测到广告后的处理方式",
+    "items": {
+      "enable_withdraw": {
+        "type": "bool",
+        "description": "自动撤回违规消息",
+        "default": true,
+        "hint": "开启后会自动撤回检测到的广告消息"
+      },
+      "enable_warn": {
+        "type": "bool",
+        "description": "发送警告消息",
+        "default": true,
+        "hint": "开启后会向违规用户发送警告"
+      },
+      "enable_kick": {
+        "type": "bool",
+        "description": "达到阈值踢出群",
+        "default": false,
+        "hint": "开启后违规达到阈值会自动踢出群"
+      },
+      "warn_threshold": {
+        "type": "int",
+        "description": "踢出警告阈值",
+        "default": 3,
+        "hint": "达到多少次违规后踢出群",
+        "slider": {
+          "min": 1,
+          "max": 10,
+          "step": 1
+        }
+      },
+      "warn_message": {
+        "type": "string",
+        "description": "警告消息内容",
+        "default": "检测到您发送了广告内容，请遵守群规！",
+        "hint": "发送给违规用户的警告消息"
+      }
+    }
   }
 }
+
