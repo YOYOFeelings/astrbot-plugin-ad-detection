@@ -1,4 +1,4 @@
-name: astrbot-plugin-ad-detection
+name: astrbot_plugin_ad_detection
 version: 1.0.0
 author: AstrBot
 description: AstrBot QQ群广告检测插件，支持文本正则/AI检测、图片OCR检测
