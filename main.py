@@ -254,7 +254,7 @@ class AdDetection(Star):
         return False, "", ""
 
     async def _handle_violation(self, event: AstrMessageEvent, reason: str, detection_type: str):
-        """处理违规消息"""
+        """处理违规消息 - 使用 yield 返回结果"""
         user_id = str(event.get_sender_id()) if event.get_sender_id() else ""
         group_id = event.get_group_id() or ""
 
@@ -265,23 +265,12 @@ class AdDetection(Star):
 
         violation = self.db.add_violation(user_id, group_id)
 
-        # 撤回消息
-        if self._get_config("enable_withdraw", True):
-            try:
-                await event.recall()
-                logger.info(f"[广告检测] 消息已撤回")
-            except Exception as e:
-                logger.warning(f"[广告检测] 撤回失败: {e}")
-
         # 发送警告
         if self._get_config("enable_warn", True):
             warn_msg = self._get_config("warn_message", "检测到您发送了广告内容，请遵守群规！")
             full_msg = f"{warn_msg}\n违规原因：{reason}\n当前违规次数：{violation.violation_count}"
-            try:
-                await event.send(full_msg)
-                logger.info(f"[广告检测] 警告已发送")
-            except Exception as e:
-                logger.warning(f"[广告检测] 发送警告失败: {e}")
+            logger.info(f"[广告检测] 发送警告: {full_msg}")
+            yield event.plain_result(full_msg)
 
         # 踢出群
         if self._get_config("enable_kick", False):
@@ -295,7 +284,7 @@ class AdDetection(Star):
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     async def on_group_message(self, event: AstrMessageEvent):
-        """处理群消息"""
+        """处理群消息 - 使用 yield 返回结果"""
         try:
             group_id = event.get_group_id() or ""
             if not group_id:
@@ -306,7 +295,7 @@ class AdDetection(Star):
 
             is_ad, reason, detection_type = await self._detect_ad(event)
             if is_ad:
-                await self._handle_violation(event, reason, detection_type)
+                yield from self._handle_violation(event, reason, detection_type)
         except Exception as e:
             logger.error(f"处理消息失败: {e}", exc_info=True)
 
@@ -315,35 +304,35 @@ class AdDetection(Star):
         """查看用户违规记录 [用户ID]"""
         sender_id = str(event.get_sender_id()) if event.get_sender_id() else ""
         if not self._is_admin_by_qq(sender_id):
-            await event.send("您没有权限执行此命令")
+            yield event.plain_result("您没有权限执行此命令")
             return
 
         if not user_id:
-            await event.send("请指定要查询的用户ID：/广告违规 [用户ID]")
+            yield event.plain_result("请指定要查询的用户ID：/广告违规 [用户ID]")
             return
         group_id = event.get_group_id() or ""
         record = self.db.get_violation(user_id, group_id)
         if record:
             msg = f"用户 {user_id} 的违规记录：\n违规次数：{record.violation_count}\n最近违规时间：{record.last_violation_time}"
-            await event.send(msg)
+            yield event.plain_result(msg)
         else:
-            await event.send(f"未找到用户 {user_id} 的违规记录")
+            yield event.plain_result(f"未找到用户 {user_id} 的违规记录")
 
     @filter.command("重置违规", alias={"ad_reset"})
     async def cmd_reset(self, event: AstrMessageEvent, user_id: str = ""):
         """重置用户违规记录 [用户ID]"""
         sender_id = str(event.get_sender_id()) if event.get_sender_id() else ""
         if not self._is_admin_by_qq(sender_id):
-            await event.send("您没有权限执行此命令")
+            yield event.plain_result("您没有权限执行此命令")
             return
 
         if not user_id:
-            await event.send("请指定要重置的用户ID：/重置违规 [用户ID]")
+            yield event.plain_result("请指定要重置的用户ID：/重置违规 [用户ID]")
             return
         group_id = event.get_group_id() or ""
         success = self.db.reset_violation(user_id, group_id)
         msg = f"{'已重置' if success else '未找到'}用户 {user_id} 的违规记录"
-        await event.send(msg)
+        yield event.plain_result(msg)
 
     @filter.command("广告帮助", alias={"ad_help"})
     async def cmd_help(self, event: AstrMessageEvent):
@@ -352,4 +341,4 @@ class AdDetection(Star):
 /广告违规 [用户ID] - 查看用户违规记录（管理员）
 /重置违规 [用户ID] - 重置用户违规记录（管理员）
 /广告帮助 - 显示此帮助"""
-        await event.send(help_text)
+        yield event.plain_result(help_text)
