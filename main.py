@@ -217,6 +217,23 @@ class AdDetection(Star):
                 logger.warning("[广告检测] 无法获取消息ID，无法撤回")
                 return False
 
+            unified_msg_origin = event.unified_msg_origin
+            logger.info(f"[广告检测] 尝试撤回消息 ID: {message_id}, 会话: {unified_msg_origin}")
+
+            try:
+                import astrbot.api.message_components as Comp
+                recall_component = Comp.recall(message_id)
+                
+                await self.context.send_message(
+                    unified_msg_origin,
+                    [recall_component]
+                )
+                
+                logger.info(f"[广告检测] 消息已发送撤回指令，ID: {message_id}")
+                return True
+            except Exception as send_err:
+                logger.warning(f"[广告检测] 通过 send_message 撤回失败: {send_err}")
+
             for attr_name in dir(self.context):
                 if 'platform' in attr_name.lower() or 'adapter' in attr_name.lower() or 'client' in attr_name.lower():
                     logger.info(f"[广告检测] Context属性: {attr_name}")
@@ -225,7 +242,7 @@ class AdDetection(Star):
             if platform:
                 if hasattr(platform, 'recall') and callable(getattr(platform, 'recall')):
                     await platform.recall(message_id=message_id)
-                    logger.info(f"[广告检测] 消息已撤回，ID: {message_id}")
+                    logger.info(f"[广告检测] 消息已撤回（通过platform.recall），ID: {message_id}")
                     return True
             
             platform_obj = None
