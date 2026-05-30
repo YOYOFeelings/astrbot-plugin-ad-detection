@@ -8,16 +8,16 @@ from .commands import CommandManager
 
 
 class AdDetection(Star):
-    def __init__(self, context):
+    def __init__(self, context, config):
         super().__init__(context)
         self.plugin_name = "astrbot_plugin_ad_detection"
         self.db = None
         self.detector = None
         self.handler = None
         self.cmd_manager = None
+        self.config = config
         
     async def initialize(self):
-        config = self.context.get_config()
         data_dir = self.context.get_data_dir()
         db_path = os.path.join(data_dir, "ad_detection.db")
         
@@ -25,15 +25,15 @@ class AdDetection(Star):
         
         llm_provider = None
         try:
-            provider_name = config.get("ai_provider")
+            provider_name = self.config.get("ai_provider")
             if provider_name:
                 llm_provider = self.context.get_provider(provider_name)
         except Exception:
             pass
         
-        self.detector = AdDetector(config, llm_provider)
-        self.handler = ViolationHandler(config, self.db, self.context)
-        self.cmd_manager = CommandManager(config, self.db, self.context)
+        self.detector = AdDetector(self.config, llm_provider)
+        self.handler = ViolationHandler(self.config, self.db, self.context)
+        self.cmd_manager = CommandManager(self.config, self.db, self.context)
         
         for cmd in self.cmd_manager.get_commands():
             self.register_command(cmd)
