@@ -1,8 +1,7 @@
 import re
 import base64
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from astrbot.api.provider import Provider
-from astrbot.api.config import AstrBotConfig
 from astrbot.api.event import AstrMessageEvent
 
 
@@ -14,7 +13,7 @@ class DetectionResult:
 
 
 class AdDetector:
-    def __init__(self, config: AstrBotConfig, llm_provider: Optional[Provider] = None):
+    def __init__(self, config: Dict[str, Any], llm_provider: Optional[Provider] = None):
         self.config = config
         self.llm_provider = llm_provider
         self.regex_rules = config.get("regex_rules", [])

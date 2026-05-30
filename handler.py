@@ -1,12 +1,11 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from astrbot.api.event import AstrMessageEvent
-from astrbot.api.config import AstrBotConfig
 from .database import DatabaseManager
 from .detector import DetectionResult
 
 
 class ViolationHandler:
-    def __init__(self, config: AstrBotConfig, db: DatabaseManager, context):
+    def __init__(self, config: Dict[str, Any], db: DatabaseManager, context):
         self.config = config
         self.db = db
         self.context = context

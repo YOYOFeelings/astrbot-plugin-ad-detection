@@ -1,11 +1,10 @@
-from typing import List
+from typing import List, Dict, Any
 from astrbot.api.event import AstrMessageEvent
-from astrbot.api.config import AstrBotConfig
 from .database import DatabaseManager, ViolationRecord
 
 
 class CommandManager:
-    def __init__(self, config: AstrBotConfig, db: DatabaseManager, context):
+    def __init__(self, config: Dict[str, Any], db: DatabaseManager, context):
         self.config = config
         self.db = db
         self.context = context
