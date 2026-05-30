@@ -1,4 +1,3 @@
-
 import os
 import re
 from pathlib import Path
@@ -44,7 +43,7 @@ class DatabaseManager:
         self.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
-    def add_violation(self, user_id: str, group_id: str) -&gt; ViolationRecord:
+    def add_violation(self, user_id: str, group_id: str):
         session = self.Session()
         try:
             result = session.query(self.violations_table).filter_by(
@@ -70,7 +69,7 @@ class DatabaseManager:
         finally:
             session.close()
 
-    def get_violation(self, user_id: str, group_id: str) -&gt; Optional[ViolationRecord]:
+    def get_violation(self, user_id: str, group_id: str):
         session = self.Session()
         try:
             result = session.query(self.violations_table).filter_by(
@@ -82,7 +81,7 @@ class DatabaseManager:
         finally:
             session.close()
 
-    def reset_violation(self, user_id: str, group_id: str) -&gt; bool:
+    def reset_violation(self, user_id: str, group_id: str):
         session = self.Session()
         try:
             result = session.execute(
@@ -90,11 +89,11 @@ class DatabaseManager:
                 .where(self.violations_table.c.user_id == user_id, self.violations_table.c.group_id == group_id)
             )
             session.commit()
-            return result.rowcount &gt; 0
+            return result.rowcount > 0
         finally:
             session.close()
 
-    def is_user_whitelisted(self, user_id: str, group_id: str) -&gt; bool:
+    def is_user_whitelisted(self, user_id: str, group_id: str):
         session = self.Session()
         try:
             result = session.query(self.user_whitelist_table).filter_by(
@@ -104,7 +103,7 @@ class DatabaseManager:
         finally:
             session.close()
 
-    def is_group_whitelisted(self, group_id: str) -&gt; bool:
+    def is_group_whitelisted(self, group_id: str):
         session = self.Session()
         try:
             result = session.query(self.group_whitelist_table).filter_by(group_id=group_id).first()
@@ -112,7 +111,7 @@ class DatabaseManager:
         finally:
             session.close()
 
-    def add_user_to_whitelist(self, user_id: str, group_id: str) -&gt; bool:
+    def add_user_to_whitelist(self, user_id: str, group_id: str):
         session = self.Session()
         try:
             if self.is_user_whitelisted(user_id, group_id):
@@ -123,7 +122,7 @@ class DatabaseManager:
         finally:
             session.close()
 
-    def remove_user_from_whitelist(self, user_id: str, group_id: str) -&gt; bool:
+    def remove_user_from_whitelist(self, user_id: str, group_id: str):
         session = self.Session()
         try:
             result = session.execute(
@@ -131,11 +130,11 @@ class DatabaseManager:
                 .where(self.user_whitelist_table.c.user_id == user_id, self.user_whitelist_table.c.group_id == group_id)
             )
             session.commit()
-            return result.rowcount &gt; 0
+            return result.rowcount > 0
         finally:
             session.close()
 
-    def add_group_to_whitelist(self, group_id: str) -&gt; bool:
+    def add_group_to_whitelist(self, group_id: str):
         session = self.Session()
         try:
             if self.is_group_whitelisted(group_id):
@@ -146,7 +145,7 @@ class DatabaseManager:
         finally:
             session.close()
 
-    def remove_group_from_whitelist(self, group_id: str) -&gt; bool:
+    def remove_group_from_whitelist(self, group_id: str):
         session = self.Session()
         try:
             result = session.execute(
@@ -154,7 +153,7 @@ class DatabaseManager:
                 .where(self.group_whitelist_table.c.group_id == group_id)
             )
             session.commit()
-            return result.rowcount &gt; 0
+            return result.rowcount > 0
         finally:
             session.close()
 
@@ -184,7 +183,7 @@ class AdDetection(Star):
         self.db = DatabaseManager(str(db_path))
         logger.info("广告检测插件初始化完成")
 
-    def _check_group_permission(self, group_id: str) -&gt; bool:
+    def _check_group_permission(self, group_id: str):
         """检查群是否有权限使用此插件"""
         mode = self.config.get("basic.group_list_mode", "none")
         group_list = self.config.get("basic.group_list", [])
@@ -192,7 +191,6 @@ class AdDetection(Star):
         if mode == "none":
             return True
 
-        # 尝试匹配完整ID或纯群号
         match_found = False
         for allowed_group in group_list:
             if group_id == allowed_group or str(group_id) in str(allowed_group):
@@ -205,12 +203,11 @@ class AdDetection(Star):
             return not match_found
         return True
 
-    async def _detect_ad(self, event: AstrMessageEvent) -&gt; tuple[bool, str, str]:
+    async def _detect_ad(self, event: AstrMessageEvent):
         """检测消息是否为广告"""
         regex_rules = self.config.get("basic.regex_rules", [])
         message_str = event.message_str or ""
 
-        # 正则检测
         if self.config.get("basic.enable_regex_detection", True):
             for rule in regex_rules:
                 try:
@@ -219,7 +216,6 @@ class AdDetection(Star):
                 except re.error:
                     continue
 
-        # 引用消息检测
         if self.config.get("basic.enable_quote_detection", False):
             try:
                 for component in event.message_obj.message:
@@ -245,20 +241,17 @@ class AdDetection(Star):
         if not group_id:
             return
 
-        # 检查数据库白名单
         if self.db.is_group_whitelisted(group_id) or self.db.is_user_whitelisted(user_id, group_id):
             return
 
         violation = self.db.add_violation(user_id, group_id)
 
-        # 撤回消息
         if self.config.get("action.enable_withdraw", True):
             try:
                 await event.recall()
             except Exception:
                 pass
 
-        # 发送警告
         if self.config.get("action.enable_warn", True):
             warn_msg = self.config.get("action.warn_message", "检测到您发送了广告内容，请遵守群规！")
             full_msg = f"{warn_msg}\n违规原因：{reason}\n当前违规次数：{violation.violation_count}"
@@ -267,10 +260,9 @@ class AdDetection(Star):
             except Exception:
                 pass
 
-        # 踢出群
         if self.config.get("action.enable_kick", False):
             threshold = self.config.get("action.warn_threshold", 3)
-            if violation.violation_count &gt;= threshold:
+            if violation.violation_count >= threshold:
                 try:
                     await self.context.kick_group_member(group_id, user_id)
                 except Exception:
@@ -284,7 +276,6 @@ class AdDetection(Star):
             if not group_id:
                 return
 
-            # 检查群权限
             if not self._check_group_permission(group_id):
                 return
 
@@ -362,4 +353,3 @@ class AdDetection(Star):
 /群白名单 [add/remove] - 管理群组白名单
 /广告帮助 - 显示此帮助"""
         await event.send(help_text)
-
