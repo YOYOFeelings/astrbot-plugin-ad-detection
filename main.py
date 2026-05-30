@@ -87,6 +87,54 @@ class DatabaseManager:
             session.close()
 
 
+DEFAULT_REGEX_RULES = [
+    "加群",
+    "加v",
+    "加V",
+    "加微信",
+    "兼职",
+    "赚钱",
+    "外宣",
+    "外快",
+    "赚米",
+    "扫码",
+    "二维码",
+    "代刷",
+    "代做",
+    "免费领",
+    "免费送",
+    "限时免费",
+    "低价",
+    "特价",
+    "优惠",
+    "促销",
+    "联系.*微信",
+    "微信.*联系",
+    "qq.*群",
+    "群.*qq",
+    "出售",
+    "转让",
+    "代购",
+    "代理",
+    "加盟",
+    "招商",
+    "招.*人",
+    "人.*招",
+    "免费.*进",
+    "福利.*进",
+    "进.*群",
+    "vx.*群",
+    "群.*vx",
+    "v.*群",
+    "群.*v",
+    "微信.*群",
+    "群.*微信",
+    "福利群",
+    "开车群",
+    "上车",
+]
+
+
 class AdDetection(Star):
     """广告检测插件主类"""
     config: AstrBotConfig
@@ -111,6 +159,14 @@ class AdDetection(Star):
         db_path = plugin_data_dir / "ad_detection.db"
         self.db = DatabaseManager(str(db_path))
         logger.info("广告检测插件初始化完成")
+
+    def _get_regex_rules(self) -> List[str]:
+        """获取正则规则，优先从配置读取，否则使用默认规则"""
+        rules = self.config.get("basic.regex_rules", [])
+        if not rules or len(rules) == 0:
+            logger.info("[广告检测] 使用默认正则规则")
+            return DEFAULT_REGEX_RULES
+        return rules
 
     def _is_admin_by_qq(self, user_id: str) -> bool:
         """通过配置的QQ号判断是否为管理员"""
@@ -183,7 +239,7 @@ class AdDetection(Star):
 
     async def _detect_ad(self, event: AstrMessageEvent) -> tuple[bool, str, str]:
         """检测消息是否为广告"""
-        regex_rules = self.config.get("basic.regex_rules", [])
+        regex_rules = self._get_regex_rules()
         message_str = event.message_str or ""
         group_id = event.get_group_id() or ""
         user_id = str(event.get_sender_id()) if event.get_sender_id() else ""
