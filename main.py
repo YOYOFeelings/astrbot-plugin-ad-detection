@@ -196,26 +196,62 @@ class AdDetection(Star):
     async def _recall_message(self, event: AstrMessageEvent):
         """撤回消息"""
         try:
-            # 获取消息ID
             message_id = None
-            if hasattr(event.message_obj, 'raw_message'):
+            
+            if hasattr(event.message_obj, 'message_id'):
+                message_id = event.message_obj.message_id
+            
+            if not message_id and hasattr(event.message_obj, 'raw_message'):
                 raw_msg = event.message_obj.raw_message
                 if isinstance(raw_msg, dict):
                     message_id = raw_msg.get('message_id')
+                elif isinstance(raw_msg, str):
+                    try:
+                        import json as json_module
+                        raw_dict = json_module.loads(raw_msg)
+                        message_id = raw_dict.get('message_id')
+                    except:
+                        pass
             
             if not message_id:
                 logger.warning("[广告检测] 无法获取消息ID，无法撤回")
                 return False
 
-            # 获取平台适配器
-            platform = self.context.platform
-            if hasattr(platform, 'recall') and callable(platform.recall):
-                await platform.recall(message_id=message_id)
-                logger.info(f"[广告检测] 消息已撤回，ID: {message_id}")
-                return True
-            else:
-                logger.warning("[广告检测] 当前平台不支持消息撤回")
-                return False
+            for attr_name in dir(self.context):
+                if 'platform' in attr_name.lower() or 'adapter' in attr_name.lower() or 'client' in attr_name.lower():
+                    logger.info(f"[广告检测] Context属性: {attr_name}")
+            
+            platform = getattr(self.context, 'platform', None)
+            if platform:
+                if hasattr(platform, 'recall') and callable(getattr(platform, 'recall')):
+                    await platform.recall(message_id=message_id)
+                    logger.info(f"[广告检测] 消息已撤回，ID: {message_id}")
+                    return True
+            
+            platform_obj = None
+            if hasattr(self.context, 'get_adapter'):
+                try:
+                    platform_obj = self.context.get_adapter()
+                    if platform_obj and hasattr(platform_obj, 'recall'):
+                        await platform_obj.recall(message_id=message_id)
+                        logger.info(f"[广告检测] 消息已撤回（通过get_adapter），ID: {message_id}")
+                        return True
+                except Exception as e:
+                    logger.warning(f"[广告检测] get_adapter方式失败: {e}")
+            
+            if hasattr(self.context, 'client'):
+                client = self.context.client
+                if hasattr(client, 'delete_msg'):
+                    await client.delete_msg(message_id=message_id)
+                    logger.info(f"[广告检测] 消息已撤回（通过client.delete_msg），ID: {message_id}")
+                    return True
+                elif hasattr(client, 'recall'):
+                    await client.recall(message_id=message_id)
+                    logger.info(f"[广告检测] 消息已撤回（通过client.recall），ID: {message_id}")
+                    return True
+            
+            logger.warning("[广告检测] 当前平台不支持消息撤回或未找到合适的撤回方法")
+            return False
         except Exception as e:
             logger.warning(f"[广告检测] 撤回消息失败: {e}")
             return False
@@ -229,46 +265,100 @@ class AdDetection(Star):
 
         logger.info(f"[广告检测] 收到消息: {message_str}, 发送者: {user_id}, 群: {group_id}")
 
-        # 管理员白名单跳过检测
+        if not message_str and hasattr(event.message_obj, 'message') and event.message_obj.message:
+            for comp in event.message_obj.message:
+                if hasattr(comp, 'type'):
+                    logger.info(f"[广告检测] 消息组件类型: {comp.type}")
+
         admin_qqs = self._get_config("admin_qqs", [])
         if str(user_id) in [str(qq) for qq in admin_qqs]:
             logger.info(f"[广告检测] 用户是管理员，跳过检测")
             return False, "", ""
 
-        # 群组白名单跳过检测
         whitelist = self._get_config("group_whitelist", [])
         if whitelist and (group_id in whitelist or str(group_id) in [str(g) for g in whitelist]):
             logger.info(f"[广告检测] 群在白名单中，跳过检测")
             return False, "", ""
 
-        # 正则检测
-        if self._get_config("enable_regex_detection", True):
-            logger.info(f"[广告检测] 开始正则检测，规则数: {len(regex_rules)}")
-            for rule in regex_rules:
-                try:
-                    if re.search(rule, message_str, re.IGNORECASE):
-                        logger.info(f"[广告检测] 匹配成功！规则: {rule}")
-                        return True, f"匹配到违规关键词: {rule}", "regex"
-                except re.error:
-                    continue
+        def check_text_content(text: str) -> tuple[bool, str, str]:
+            if not text:
+                return False, "", ""
+            
+            if self._get_config("enable_regex_detection", True):
+                logger.info(f"[广告检测] 开始正则检测，规则数: {len(regex_rules)}")
+                for rule in regex_rules:
+                    try:
+                        if re.search(rule, text, re.IGNORECASE):
+                            logger.info(f"[广告检测] 匹配成功！规则: {rule}")
+                            return True, f"匹配到违规关键词: {rule}", "regex"
+                    except re.error:
+                        continue
+            return False, "", ""
 
-        # 引用消息检测
+        is_ad, reason, detection_type = check_text_content(message_str)
+        if is_ad:
+            return True, reason, detection_type
+
+        if hasattr(event.message_obj, 'message') and event.message_obj.message:
+            for component in event.message_obj.message:
+                component_type = getattr(component, 'type', 'unknown')
+                
+                if component_type == 'xml':
+                    xml_content = getattr(component, 'data', {}) or {}
+                    if isinstance(xml_content, dict):
+                        xml_text = xml_content.get('content', '')
+                    else:
+                        xml_text = str(xml_content)
+                    if xml_text:
+                        logger.info(f"[广告检测] 检测XML内容: {xml_text[:200]}")
+                        is_ad, reason, detection_type = check_text_content(xml_text)
+                        if is_ad:
+                            return True, f"XML内容{reason}", detection_type
+                
+                elif component_type == 'json':
+                    json_content = getattr(component, 'data', {}) or {}
+                    if isinstance(json_content, dict):
+                        json_text = json.dumps(json_content, ensure_ascii=False)
+                    else:
+                        json_text = str(json_content)
+                    if json_text:
+                        logger.info(f"[广告检测] 检测JSON内容: {json_text[:200]}")
+                        is_ad, reason, detection_type = check_text_content(json_text)
+                        if is_ad:
+                            return True, f"JSON内容{reason}", detection_type
+                
+                elif component_type == 'forward':
+                    forward_content = getattr(component, 'content', None) or getattr(component, 'data', None)
+                    if forward_content:
+                        forward_text = str(forward_content)
+                        logger.info(f"[广告检测] 检测转发内容: {forward_text[:200]}")
+                        is_ad, reason, detection_type = check_text_content(forward_text)
+                        if is_ad:
+                            return True, f"转发内容{reason}", detection_type
+                
+                elif component_type == 'share':
+                    share_data = getattr(component, 'data', {}) or {}
+                    share_text = ' '.join(str(v) for v in share_data.values() if v)
+                    if share_text:
+                        logger.info(f"[广告检测] 检测分享内容: {share_text}")
+                        is_ad, reason, detection_type = check_text_content(share_text)
+                        if is_ad:
+                            return True, f"分享内容{reason}", detection_type
+
         if self._get_config("enable_quote_detection", False):
             try:
                 for component in event.message_obj.message:
-                    if component.type == 'reply':
-                        quoted_text = getattr(component, 'content', None)
+                    if getattr(component, 'type', '') == 'reply':
+                        quoted_text = getattr(component, 'content', None) or getattr(component, 'data', None)
                         if quoted_text:
-                            for rule in regex_rules:
-                                try:
-                                    if re.search(rule, str(quoted_text), re.IGNORECASE):
-                                        return True, f"引用消息匹配到违规关键词: {rule}", "regex"
-                                except re.error:
-                                    continue
-            except Exception:
-                pass
+                            quoted_str = str(quoted_text)
+                            logger.info(f"[广告检测] 检测引用消息: {quoted_str[:200]}")
+                            is_ad, reason, detection_type = check_text_content(quoted_str)
+                            if is_ad:
+                                return True, f"引用消息{reason}", detection_type
+            except Exception as e:
+                logger.warning(f"[广告检测] 引用消息检测失败: {e}")
 
-        # AI检测
         if self._get_config("enable_ai_detection", False):
             is_ad, reason = await self._call_ai_detect(message_str)
             if is_ad:
