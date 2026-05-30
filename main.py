@@ -11,7 +11,6 @@ from astrbot.api import AstrBotConfig
 from astrbot.api.star import Star, StarTools, Context
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.event.filter import PermissionType
-from astrbot.core.message.components import Text
 from astrbot.api import logger
 
 
@@ -264,7 +263,7 @@ class AdDetection(Star):
             warn_msg = self.config.get("action.warn_message", "检测到您发送了广告内容，请遵守群规！")
             full_msg = f"{warn_msg}\n违规原因：{reason}\n当前违规次数：{violation.violation_count}"
             try:
-                await event.send([Text(full_msg)])
+                await event.send(full_msg)
                 logger.info(f"[广告检测] 警告已发送")
             except Exception as e:
                 logger.warning(f"[广告检测] 发送警告失败: {e}")
@@ -302,19 +301,19 @@ class AdDetection(Star):
         sender_id = str(event.get_sender_id()) if event.get_sender_id() else ""
         admin_qqs = self.config.get("basic.admin_qqs", [])
         if not self._is_admin_by_qq(sender_id) and sender_id not in [str(qq) for qq in admin_qqs]:
-            await event.send([Text("您没有权限执行此命令")])
+            await event.send("您没有权限执行此命令")
             return
 
         if not user_id:
-            await event.send([Text("请指定要查询的用户ID：/广告违规 [用户ID]")])
+            await event.send("请指定要查询的用户ID：/广告违规 [用户ID]")
             return
         group_id = event.get_group_id() or ""
         record = self.db.get_violation(user_id, group_id)
         if record:
             msg = f"用户 {user_id} 的违规记录：\n违规次数：{record.violation_count}\n最近违规时间：{record.last_violation_time}"
-            await event.send([Text(msg)])
+            await event.send(msg)
         else:
-            await event.send([Text(f"未找到用户 {user_id} 的违规记录")])
+            await event.send(f"未找到用户 {user_id} 的违规记录")
 
     @filter.command("重置违规", alias={"ad_reset"})
     async def cmd_reset(self, event: AstrMessageEvent, user_id: str = ""):
@@ -322,16 +321,16 @@ class AdDetection(Star):
         sender_id = str(event.get_sender_id()) if event.get_sender_id() else ""
         admin_qqs = self.config.get("basic.admin_qqs", [])
         if not self._is_admin_by_qq(sender_id) and sender_id not in [str(qq) for qq in admin_qqs]:
-            await event.send([Text("您没有权限执行此命令")])
+            await event.send("您没有权限执行此命令")
             return
 
         if not user_id:
-            await event.send([Text("请指定要重置的用户ID：/重置违规 [用户ID]")])
+            await event.send("请指定要重置的用户ID：/重置违规 [用户ID]")
             return
         group_id = event.get_group_id() or ""
         success = self.db.reset_violation(user_id, group_id)
         msg = f"{'已重置' if success else '未找到'}用户 {user_id} 的违规记录"
-        await event.send([Text(msg)])
+        await event.send(msg)
 
     @filter.command("广告帮助", alias={"ad_help"})
     async def cmd_help(self, event: AstrMessageEvent):
@@ -340,4 +339,4 @@ class AdDetection(Star):
 /广告违规 [用户ID] - 查看用户违规记录（管理员）
 /重置违规 [用户ID] - 重置用户违规记录（管理员）
 /广告帮助 - 显示此帮助"""
-        await event.send([Text(help_text)])
+        await event.send(help_text)
