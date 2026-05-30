@@ -217,45 +217,8 @@ class AdDetection(Star):
                 logger.warning("[广告检测] 无法获取消息ID，无法撤回")
                 return False
 
-            unified_msg_origin = event.unified_msg_origin
-            logger.info(f"[广告检测] 尝试撤回消息 ID: {message_id}, 会话: {unified_msg_origin}")
+            logger.info(f"[广告检测] 尝试撤回消息 ID: {message_id}")
 
-            try:
-                import astrbot.api.message_components as Comp
-                recall_component = Comp.recall(message_id)
-                
-                await self.context.send_message(
-                    unified_msg_origin,
-                    [recall_component]
-                )
-                
-                logger.info(f"[广告检测] 消息已发送撤回指令，ID: {message_id}")
-                return True
-            except Exception as send_err:
-                logger.warning(f"[广告检测] 通过 send_message 撤回失败: {send_err}")
-
-            for attr_name in dir(self.context):
-                if 'platform' in attr_name.lower() or 'adapter' in attr_name.lower() or 'client' in attr_name.lower():
-                    logger.info(f"[广告检测] Context属性: {attr_name}")
-            
-            platform = getattr(self.context, 'platform', None)
-            if platform:
-                if hasattr(platform, 'recall') and callable(getattr(platform, 'recall')):
-                    await platform.recall(message_id=message_id)
-                    logger.info(f"[广告检测] 消息已撤回（通过platform.recall），ID: {message_id}")
-                    return True
-            
-            platform_obj = None
-            if hasattr(self.context, 'get_adapter'):
-                try:
-                    platform_obj = self.context.get_adapter()
-                    if platform_obj and hasattr(platform_obj, 'recall'):
-                        await platform_obj.recall(message_id=message_id)
-                        logger.info(f"[广告检测] 消息已撤回（通过get_adapter），ID: {message_id}")
-                        return True
-                except Exception as e:
-                    logger.warning(f"[广告检测] get_adapter方式失败: {e}")
-            
             if hasattr(self.context, 'client'):
                 client = self.context.client
                 if hasattr(client, 'delete_msg'):
@@ -267,6 +230,37 @@ class AdDetection(Star):
                     logger.info(f"[广告检测] 消息已撤回（通过client.recall），ID: {message_id}")
                     return True
             
+            if hasattr(event, 'recall'):
+                await event.recall()
+                logger.info(f"[广告检测] 消息已撤回（通过event.recall），ID: {message_id}")
+                return True
+            
+            if hasattr(event.message_obj, 'recall'):
+                await event.message_obj.recall()
+                logger.info(f"[广告检测] 消息已撤回（通过message_obj.recall），ID: {message_id}")
+                return True
+
+            if hasattr(self.context, 'platform_manager'):
+                pm = self.context.platform_manager
+                try:
+                    for platform in pm.get_platforms():
+                        if hasattr(platform, 'recall'):
+                            await platform.recall(message_id=message_id)
+                            logger.info(f"[广告检测] 消息已撤回（通过platform_manager），ID: {message_id}")
+                            return True
+                except Exception as e:
+                    logger.warning(f"[广告检测] platform_manager方式失败: {e}")
+
+            if hasattr(self.context, 'get_adapter'):
+                try:
+                    platform_obj = self.context.get_adapter()
+                    if platform_obj and hasattr(platform_obj, 'recall'):
+                        await platform_obj.recall(message_id=message_id)
+                        logger.info(f"[广告检测] 消息已撤回（通过get_adapter），ID: {message_id}")
+                        return True
+                except Exception as e:
+                    logger.warning(f"[广告检测] get_adapter方式失败: {e}")
+
             logger.warning("[广告检测] 当前平台不支持消息撤回或未找到合适的撤回方法")
             return False
         except Exception as e:
