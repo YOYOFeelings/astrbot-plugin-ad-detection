@@ -240,17 +240,6 @@ class AdDetection(Star):
                 logger.info(f"[广告检测] 消息已撤回（通过message_obj.recall），ID: {message_id}")
                 return True
 
-            if hasattr(self.context, 'platform_manager'):
-                pm = self.context.platform_manager
-                try:
-                    for platform in pm.get_platforms():
-                        if hasattr(platform, 'recall'):
-                            await platform.recall(message_id=message_id)
-                            logger.info(f"[广告检测] 消息已撤回（通过platform_manager），ID: {message_id}")
-                            return True
-                except Exception as e:
-                    logger.warning(f"[广告检测] platform_manager方式失败: {e}")
-
             if hasattr(self.context, 'get_adapter'):
                 try:
                     platform_obj = self.context.get_adapter()
