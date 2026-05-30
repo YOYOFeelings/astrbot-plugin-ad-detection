@@ -1,10 +1,27 @@
-
 {
   "basic": {
     "description": "基础设置",
     "type": "object",
     "hint": "广告检测插件的基础配置项",
     "items": {
+      "admin_qqs": {
+        "type": "list",
+        "description": "管理员QQ号列表",
+        "default": [],
+        "hint": "填写管理员的QQ号，配置后这些用户可以使用管理命令",
+        "items": {
+          "type": "string"
+        }
+      },
+      "group_whitelist": {
+        "type": "list",
+        "description": "群组白名单",
+        "default": [],
+        "hint": "这些群组将跳过广告检测",
+        "items": {
+          "type": "string"
+        }
+      },
       "group_list_mode": {
         "description": "群聊权限模式",
         "type": "string",
@@ -14,13 +31,13 @@
           "none"
         ],
         "default": "none",
-        "hint": "决定哪些群可以使用广告检测功能。whitelist=只允许白名单群；blacklist=屏蔽黑名单群；none=所有群都启用"
+        "hint": "决定哪些群可以使用广告检测功能"
       },
       "group_list": {
         "type": "list",
         "description": "群聊白/黑名单列表",
         "default": [],
-        "hint": "要填的群列表。可以填完整会话ID或只填群号",
+        "hint": "要填的群列表",
         "items": {
           "type": "string"
         }
@@ -36,12 +53,6 @@
         "description": "启用引用消息检测",
         "default": false,
         "hint": "开启后会检测引用的消息内容"
-      },
-      "enable_image_detection": {
-        "type": "bool",
-        "description": "启用图片检测",
-        "default": false,
-        "hint": "开启后会使用AI检测图片内容"
       },
       "regex_rules": {
         "type": "list",
@@ -68,6 +79,25 @@
         "items": {
           "type": "string"
         }
+      }
+    }
+  },
+  "ai": {
+    "description": "AI检测设置",
+    "type": "object",
+    "hint": "配置AI检测广告内容",
+    "items": {
+      "enable_ai_detection": {
+        "type": "bool",
+        "description": "启用AI检测",
+        "default": false,
+        "hint": "开启后会使用AI模型检测广告内容"
+      },
+      "provider": {
+        "type": "string",
+        "description": "AI模型选择",
+        "default": "",
+        "hint": "选择要使用的AI模型提供商，请在AstrBot的模型配置中添加相应的API"
       }
     }
   },
@@ -114,4 +144,3 @@
     }
   }
 }
-

@@ -1,7 +1,9 @@
 import os
 import re
+import json
+import base64
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy import create_engine, Table, Column, String, Integer, DateTime, MetaData
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -30,15 +32,6 @@ class DatabaseManager:
             Column('group_id', String, primary_key=True),
             Column('violation_count', Integer, default=0),
             Column('last_violation_time', String)
-        )
-        self.user_whitelist_table = Table(
-            'user_whitelist', self.metadata,
-            Column('user_id', String, primary_key=True),
-            Column('group_id', String, primary_key=True)
-        )
-        self.group_whitelist_table = Table(
-            'group_whitelist', self.metadata,
-            Column('group_id', String, primary_key=True)
         )
         self.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
@@ -93,70 +86,6 @@ class DatabaseManager:
         finally:
             session.close()
 
-    def is_user_whitelisted(self, user_id: str, group_id: str):
-        session = self.Session()
-        try:
-            result = session.query(self.user_whitelist_table).filter_by(
-                user_id=user_id, group_id=group_id
-            ).first()
-            return result is not None
-        finally:
-            session.close()
-
-    def is_group_whitelisted(self, group_id: str):
-        session = self.Session()
-        try:
-            result = session.query(self.group_whitelist_table).filter_by(group_id=group_id).first()
-            return result is not None
-        finally:
-            session.close()
-
-    def add_user_to_whitelist(self, user_id: str, group_id: str):
-        session = self.Session()
-        try:
-            if self.is_user_whitelisted(user_id, group_id):
-                return False
-            session.execute(self.user_whitelist_table.insert().values(user_id=user_id, group_id=group_id))
-            session.commit()
-            return True
-        finally:
-            session.close()
-
-    def remove_user_from_whitelist(self, user_id: str, group_id: str):
-        session = self.Session()
-        try:
-            result = session.execute(
-                self.user_whitelist_table.delete()
-                .where(self.user_whitelist_table.c.user_id == user_id, self.user_whitelist_table.c.group_id == group_id)
-            )
-            session.commit()
-            return result.rowcount > 0
-        finally:
-            session.close()
-
-    def add_group_to_whitelist(self, group_id: str):
-        session = self.Session()
-        try:
-            if self.is_group_whitelisted(group_id):
-                return False
-            session.execute(self.group_whitelist_table.insert().values(group_id=group_id))
-            session.commit()
-            return True
-        finally:
-            session.close()
-
-    def remove_group_from_whitelist(self, group_id: str):
-        session = self.Session()
-        try:
-            result = session.execute(
-                self.group_whitelist_table.delete()
-                .where(self.group_whitelist_table.c.group_id == group_id)
-            )
-            session.commit()
-            return result.rowcount > 0
-        finally:
-            session.close()
-
 
 class AdDetection(Star):
     """广告检测插件主类"""
@@ -183,7 +112,12 @@ class AdDetection(Star):
         self.db = DatabaseManager(str(db_path))
         logger.info("广告检测插件初始化完成")
 
-    def _check_group_permission(self, group_id: str):
+    def _is_admin_by_qq(self, user_id: str) -> bool:
+        """通过配置的QQ号判断是否为管理员"""
+        admin_qqs = self.config.get("basic.admin_qqs", [])
+        return str(user_id) in [str(qq) for qq in admin_qqs]
+
+    def _check_group_permission(self, group_id: str) -> bool:
         """检查群是否有权限使用此插件"""
         mode = self.config.get("basic.group_list_mode", "none")
         group_list = self.config.get("basic.group_list", [])
@@ -203,11 +137,69 @@ class AdDetection(Star):
             return not match_found
         return True
 
-    async def _detect_ad(self, event: AstrMessageEvent):
+    async def _call_ai_detect(self, message: str, images: List[str] = None) -> tuple[bool, str]:
+        """调用AI检测广告内容"""
+        try:
+            provider_name = self.config.get("ai.provider")
+            if not provider_name:
+                return False, ""
+
+            provider = self.context.get_provider(provider_name)
+            if not provider:
+                return False, ""
+
+            prompt = """请判断以下消息是否包含广告内容。广告内容包括但不限于：
+1. 邀请加群、推广群聊
+2. 推销产品、服务、商业信息
+3. 诱导点击链接、二维码
+4. 虚假信息、诈骗内容
+
+消息内容：{message}
+
+请只回答"是广告"或"不是广告"，不要添加任何解释。""".format(message=message)
+
+            messages = [{"role": "user", "content": prompt}]
+
+            if images:
+                for img_data in images:
+                    if img_data.startswith("base64://"):
+                        img_base64 = img_data.replace("base64://", "")
+                        messages.append({
+                            "role": "user",
+                            "content": [
+                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}}
+                            ]
+                        })
+
+            result = await provider.chat(messages=messages)
+
+            if "是广告" in result:
+                return True, "AI检测判定为广告"
+            return False, ""
+
+        except Exception as e:
+            logger.warning(f"AI检测失败: {e}")
+            return False, ""
+
+    async def _detect_ad(self, event: AstrMessageEvent) -> tuple[bool, str, str]:
         """检测消息是否为广告"""
         regex_rules = self.config.get("basic.regex_rules", [])
         message_str = event.message_str or ""
+        group_id = event.get_group_id() or ""
+        user_id = str(event.get_sender_id()) if event.get_sender_id() else ""
 
+        # 管理员白名单跳过检测
+        admin_qqs = self.config.get("basic.admin_qqs", [])
+        if str(user_id) in [str(qq) for qq in admin_qqs]:
+            return False, "", ""
+
+        # 群组白名单跳过检测
+        if group_id and self.config.get("basic.group_whitelist", []):
+            whitelist = self.config.get("basic.group_whitelist", [])
+            if group_id in whitelist or str(group_id) in whitelist:
+                return False, "", ""
+
+        # 正则检测
         if self.config.get("basic.enable_regex_detection", True):
             for rule in regex_rules:
                 try:
@@ -216,6 +208,7 @@ class AdDetection(Star):
                 except re.error:
                     continue
 
+        # 引用消息检测
         if self.config.get("basic.enable_quote_detection", False):
             try:
                 for component in event.message_obj.message:
@@ -231,27 +224,32 @@ class AdDetection(Star):
             except Exception:
                 pass
 
+        # AI检测
+        if self.config.get("ai.enable_ai_detection", False):
+            is_ad, reason = await self._call_ai_detect(message_str)
+            if is_ad:
+                return True, reason, "ai"
+
         return False, "", ""
 
     async def _handle_violation(self, event: AstrMessageEvent, reason: str, detection_type: str):
         """处理违规消息"""
-        user_id = str(event.get_sender_id())
-        group_id = str(event.group_id) if event.group_id else ""
+        user_id = str(event.get_sender_id()) if event.get_sender_id() else ""
+        group_id = event.get_group_id() or ""
 
-        if not group_id:
-            return
-
-        if self.db.is_group_whitelisted(group_id) or self.db.is_user_whitelisted(user_id, group_id):
+        if not group_id or not user_id:
             return
 
         violation = self.db.add_violation(user_id, group_id)
 
+        # 撤回消息
         if self.config.get("action.enable_withdraw", True):
             try:
                 await event.recall()
             except Exception:
                 pass
 
+        # 发送警告
         if self.config.get("action.enable_warn", True):
             warn_msg = self.config.get("action.warn_message", "检测到您发送了广告内容，请遵守群规！")
             full_msg = f"{warn_msg}\n违规原因：{reason}\n当前违规次数：{violation.violation_count}"
@@ -260,6 +258,7 @@ class AdDetection(Star):
             except Exception:
                 pass
 
+        # 踢出群
         if self.config.get("action.enable_kick", False):
             threshold = self.config.get("action.warn_threshold", 3)
             if violation.violation_count >= threshold:
@@ -272,7 +271,7 @@ class AdDetection(Star):
     async def on_group_message(self, event: AstrMessageEvent):
         """处理群消息"""
         try:
-            group_id = str(event.group_id) if event.group_id else ""
+            group_id = event.get_group_id() or ""
             if not group_id:
                 return
 
@@ -286,13 +285,18 @@ class AdDetection(Star):
             logger.warning(f"处理消息失败: {e}")
 
     @filter.command("广告违规", alias={"ad_violation"})
-    @filter.permission_type(PermissionType.ADMIN)
     async def cmd_violation(self, event: AstrMessageEvent, user_id: str = ""):
         """查看用户违规记录 [用户ID]"""
+        sender_id = str(event.get_sender_id()) if event.get_sender_id() else ""
+        admin_qqs = self.config.get("basic.admin_qqs", [])
+        if not self._is_admin_by_qq(sender_id) and sender_id not in [str(qq) for qq in admin_qqs]:
+            await event.send("您没有权限执行此命令")
+            return
+
         if not user_id:
             await event.send("请指定要查询的用户ID：/广告违规 [用户ID]")
             return
-        group_id = str(event.group_id) if event.group_id else ""
+        group_id = event.get_group_id() or ""
         record = self.db.get_violation(user_id, group_id)
         if record:
             await event.send(f"用户 {user_id} 的违规记录：\n违规次数：{record.violation_count}\n最近违规时间：{record.last_violation_time}")
@@ -300,56 +304,26 @@ class AdDetection(Star):
             await event.send(f"未找到用户 {user_id} 的违规记录")
 
     @filter.command("重置违规", alias={"ad_reset"})
-    @filter.permission_type(PermissionType.ADMIN)
     async def cmd_reset(self, event: AstrMessageEvent, user_id: str = ""):
         """重置用户违规记录 [用户ID]"""
+        sender_id = str(event.get_sender_id()) if event.get_sender_id() else ""
+        admin_qqs = self.config.get("basic.admin_qqs", [])
+        if not self._is_admin_by_qq(sender_id) and sender_id not in [str(qq) for qq in admin_qqs]:
+            await event.send("您没有权限执行此命令")
+            return
+
         if not user_id:
             await event.send("请指定要重置的用户ID：/重置违规 [用户ID]")
             return
-        group_id = str(event.group_id) if event.group_id else ""
+        group_id = event.get_group_id() or ""
         success = self.db.reset_violation(user_id, group_id)
         await event.send(f"{'已重置' if success else '未找到'}用户 {user_id} 的违规记录")
-
-    @filter.command("用户白名单", alias={"ad_whitelist"})
-    @filter.permission_type(PermissionType.ADMIN)
-    async def cmd_whitelist(self, event: AstrMessageEvent, action: str = "", user_id: str = ""):
-        """管理用户白名单 [add/remove] [用户ID]"""
-        if not action or action not in ["add", "remove"]:
-            await event.send("用法：\n/用户白名单 add [用户ID] - 添加白名单\n/用户白名单 remove [用户ID] - 移除白名单")
-            return
-        if not user_id:
-            await event.send("请指定用户ID")
-            return
-        group_id = str(event.group_id) if event.group_id else ""
-        if action == "add":
-            success = self.db.add_user_to_whitelist(user_id, group_id)
-            await event.send(f"{'已添加' if success else '用户已在'}白名单")
-        else:
-            success = self.db.remove_user_from_whitelist(user_id, group_id)
-            await event.send(f"{'已移除' if success else '用户不在'}白名单")
-
-    @filter.command("群白名单", alias={"ad_gwhitelist"})
-    @filter.permission_type(PermissionType.ADMIN)
-    async def cmd_group_whitelist(self, event: AstrMessageEvent, action: str = ""):
-        """管理群组白名单 [add/remove]"""
-        if not action or action not in ["add", "remove"]:
-            await event.send("用法：\n/群白名单 add - 添加本群白名单\n/群白名单 remove - 移除本群白名单")
-            return
-        group_id = str(event.group_id) if event.group_id else ""
-        if action == "add":
-            success = self.db.add_group_to_whitelist(group_id)
-            await event.send(f"{'已添加' if success else '本群已在'}白名单")
-        else:
-            success = self.db.remove_group_from_whitelist(group_id)
-            await event.send(f"{'已移除' if success else '本群不在'}白名单")
 
     @filter.command("广告帮助", alias={"ad_help"})
     async def cmd_help(self, event: AstrMessageEvent):
         """显示帮助信息"""
         help_text = """广告检测插件命令：
-/广告违规 [用户ID] - 查看用户违规记录
-/重置违规 [用户ID] - 重置用户违规记录
-/用户白名单 [add/remove] [用户ID] - 管理用户白名单
-/群白名单 [add/remove] - 管理群组白名单
+/广告违规 [用户ID] - 查看用户违规记录（管理员）
+/重置违规 [用户ID] - 重置用户违规记录（管理员）
 /广告帮助 - 显示此帮助"""
         await event.send(help_text)
