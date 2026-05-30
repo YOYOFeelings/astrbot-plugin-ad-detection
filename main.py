@@ -1,5 +1,7 @@
 import os
-from astrbot.api.star import Star
+from pathlib import Path
+from typing import Dict, Any
+from astrbot.api.star import Star, StarTools
 from astrbot.api.event import AstrMessageEvent, filter as event_filter
 from .database import DatabaseManager
 from .detector import AdDetector
@@ -8,7 +10,7 @@ from .commands import CommandManager
 
 
 class AdDetection(Star):
-    def __init__(self, context, config):
+    def __init__(self, context, config: Dict[str, Any]):
         super().__init__(context)
         self.plugin_name = "astrbot_plugin_ad_detection"
         self.db = None
@@ -18,10 +20,10 @@ class AdDetection(Star):
         self.config = config
         
     async def initialize(self):
-        data_dir = self.context.get_data_dir()
-        db_path = os.path.join(data_dir, "ad_detection.db")
+        data_dir = StarTools.get_data_dir(self.plugin_name)
+        db_path = data_dir / "ad_detection.db"
         
-        self.db = DatabaseManager(db_path)
+        self.db = DatabaseManager(str(db_path))
         
         llm_provider = None
         try:
