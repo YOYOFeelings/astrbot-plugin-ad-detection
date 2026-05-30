@@ -87,54 +87,6 @@ class DatabaseManager:
             session.close()
 
 
-DEFAULT_REGEX_RULES = [
-    "加群",
-    "加v",
-    "加V",
-    "加微信",
-    "兼职",
-    "赚钱",
-    "外宣",
-    "外快",
-    "赚米",
-    "扫码",
-    "二维码",
-    "代刷",
-    "代做",
-    "免费领",
-    "免费送",
-    "限时免费",
-    "低价",
-    "特价",
-    "优惠",
-    "促销",
-    "联系.*微信",
-    "微信.*联系",
-    "qq.*群",
-    "群.*qq",
-    "出售",
-    "转让",
-    "代购",
-    "代理",
-    "加盟",
-    "招商",
-    "招.*人",
-    "人.*招",
-    "免费.*进",
-    "福利.*进",
-    "进.*群",
-    "vx.*群",
-    "群.*vx",
-    "v.*群",
-    "群.*v",
-    "微信.*群",
-    "群.*微信",
-    "福利群",
-    "开车群",
-    "上车",
-]
-
-
 class AdDetection(Star):
     """广告检测插件主类"""
     config: AstrBotConfig
@@ -144,6 +96,7 @@ class AdDetection(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
+        logger.info(f"[广告检测] 配置已加载: {config}")
 
     async def initialize(self):
         try:
@@ -160,23 +113,28 @@ class AdDetection(Star):
         self.db = DatabaseManager(str(db_path))
         logger.info("广告检测插件初始化完成")
 
-    def _get_regex_rules(self) -> List[str]:
-        """获取正则规则，优先从配置读取，否则使用默认规则"""
-        rules = self.config.get("basic.regex_rules", [])
-        if not rules or len(rules) == 0:
-            logger.info("[广告检测] 使用默认正则规则")
-            return DEFAULT_REGEX_RULES
-        return rules
+    def _get_config(self, key: str, default=None):
+        """安全获取配置值"""
+        try:
+            value = self.config.get(key)
+            logger.info(f"[广告检测] 读取配置 {key}: {value}")
+            return value if value is not None else default
+        except Exception as e:
+            logger.warning(f"[广告检测] 读取配置 {key} 失败: {e}")
+            return default
 
     def _is_admin_by_qq(self, user_id: str) -> bool:
         """通过配置的QQ号判断是否为管理员"""
-        admin_qqs = self.config.get("basic.admin_qqs", [])
+        admin_qqs = self._get_config("admin_qqs", [])
+        if not admin_qqs:
+            logger.warning("[广告检测] 未配置管理员QQ号")
+            return False
         return str(user_id) in [str(qq) for qq in admin_qqs]
 
     def _check_group_permission(self, group_id: str) -> bool:
         """检查群是否有权限使用此插件"""
-        mode = self.config.get("basic.group_list_mode", "none")
-        group_list = self.config.get("basic.group_list", [])
+        mode = self._get_config("group_list_mode", "none")
+        group_list = self._get_config("group_list", [])
 
         if mode == "none":
             return True
@@ -196,7 +154,7 @@ class AdDetection(Star):
     async def _call_ai_detect(self, message: str, images: List[str] = None) -> tuple[bool, str]:
         """调用AI检测广告内容"""
         try:
-            provider_name = self.config.get("ai.provider")
+            provider_name = self._get_config("ai_provider", "")
             if not provider_name:
                 return False, ""
 
@@ -239,27 +197,28 @@ class AdDetection(Star):
 
     async def _detect_ad(self, event: AstrMessageEvent) -> tuple[bool, str, str]:
         """检测消息是否为广告"""
-        regex_rules = self._get_regex_rules()
+        regex_rules = self._get_config("regex_rules", [])
         message_str = event.message_str or ""
         group_id = event.get_group_id() or ""
         user_id = str(event.get_sender_id()) if event.get_sender_id() else ""
 
         logger.info(f"[广告检测] 收到消息: {message_str}, 发送者: {user_id}, 群: {group_id}")
+        logger.info(f"[广告检测] 正则规则: {regex_rules}")
 
         # 管理员白名单跳过检测
-        admin_qqs = self.config.get("basic.admin_qqs", [])
+        admin_qqs = self._get_config("admin_qqs", [])
         if str(user_id) in [str(qq) for qq in admin_qqs]:
             logger.info(f"[广告检测] 用户是管理员，跳过检测")
             return False, "", ""
 
         # 群组白名单跳过检测
-        whitelist = self.config.get("basic.group_whitelist", [])
+        whitelist = self._get_config("group_whitelist", [])
         if whitelist and (group_id in whitelist or str(group_id) in [str(g) for g in whitelist]):
             logger.info(f"[广告检测] 群在白名单中，跳过检测")
             return False, "", ""
 
         # 正则检测
-        if self.config.get("basic.enable_regex_detection", True):
+        if self._get_config("enable_regex_detection", True):
             logger.info(f"[广告检测] 开始正则检测，规则数: {len(regex_rules)}")
             for rule in regex_rules:
                 try:
@@ -270,7 +229,7 @@ class AdDetection(Star):
                     continue
 
         # 引用消息检测
-        if self.config.get("basic.enable_quote_detection", False):
+        if self._get_config("enable_quote_detection", False):
             try:
                 for component in event.message_obj.message:
                     if component.type == 'reply':
@@ -286,7 +245,7 @@ class AdDetection(Star):
                 pass
 
         # AI检测
-        if self.config.get("ai.enable_ai_detection", False):
+        if self._get_config("enable_ai_detection", False):
             is_ad, reason = await self._call_ai_detect(message_str)
             if is_ad:
                 return True, reason, "ai"
@@ -307,7 +266,7 @@ class AdDetection(Star):
         violation = self.db.add_violation(user_id, group_id)
 
         # 撤回消息
-        if self.config.get("action.enable_withdraw", True):
+        if self._get_config("enable_withdraw", True):
             try:
                 await event.recall()
                 logger.info(f"[广告检测] 消息已撤回")
@@ -315,8 +274,8 @@ class AdDetection(Star):
                 logger.warning(f"[广告检测] 撤回失败: {e}")
 
         # 发送警告
-        if self.config.get("action.enable_warn", True):
-            warn_msg = self.config.get("action.warn_message", "检测到您发送了广告内容，请遵守群规！")
+        if self._get_config("enable_warn", True):
+            warn_msg = self._get_config("warn_message", "检测到您发送了广告内容，请遵守群规！")
             full_msg = f"{warn_msg}\n违规原因：{reason}\n当前违规次数：{violation.violation_count}"
             try:
                 await event.send(full_msg)
@@ -325,8 +284,8 @@ class AdDetection(Star):
                 logger.warning(f"[广告检测] 发送警告失败: {e}")
 
         # 踢出群
-        if self.config.get("action.enable_kick", False):
-            threshold = self.config.get("action.warn_threshold", 3)
+        if self._get_config("enable_kick", False):
+            threshold = self._get_config("warn_threshold", 3)
             if violation.violation_count >= threshold:
                 try:
                     await self.context.kick_group_member(group_id, user_id)
@@ -355,8 +314,7 @@ class AdDetection(Star):
     async def cmd_violation(self, event: AstrMessageEvent, user_id: str = ""):
         """查看用户违规记录 [用户ID]"""
         sender_id = str(event.get_sender_id()) if event.get_sender_id() else ""
-        admin_qqs = self.config.get("basic.admin_qqs", [])
-        if not self._is_admin_by_qq(sender_id) and sender_id not in [str(qq) for qq in admin_qqs]:
+        if not self._is_admin_by_qq(sender_id):
             await event.send("您没有权限执行此命令")
             return
 
@@ -375,8 +333,7 @@ class AdDetection(Star):
     async def cmd_reset(self, event: AstrMessageEvent, user_id: str = ""):
         """重置用户违规记录 [用户ID]"""
         sender_id = str(event.get_sender_id()) if event.get_sender_id() else ""
-        admin_qqs = self.config.get("basic.admin_qqs", [])
-        if not self._is_admin_by_qq(sender_id) and sender_id not in [str(qq) for qq in admin_qqs]:
+        if not self._is_admin_by_qq(sender_id):
             await event.send("您没有权限执行此命令")
             return
 
