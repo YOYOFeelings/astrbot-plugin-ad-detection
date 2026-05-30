@@ -1,7 +1,7 @@
 # AstrBot 广告检测插件
 
 <p align="center">
-  <img src="logo.svg" width="128" height="128" alt="Logo">
+  <img src="logo.png" width="128" height="128" alt="Logo">
   <br>
   <i>基于 AstrBot 的 QQ 群广告检测插件</i>
 </p>
