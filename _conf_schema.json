@@ -9,23 +9,16 @@
       "default": true
     },
     "enable_text_ai_detection": {
-      "title": "启用文本AI检测",
-      "description": "开启后使用AI检测文本广告",
+      "title": "启用AI检测",
+      "description": "开启后使用AI检测文本和图片广告（需配置AI提供商）",
       "type": "boolean",
       "default": false
     },
     "enable_image_detection": {
       "title": "启用图片检测",
-      "description": "开启后检测图片中的广告内容",
+      "description": "开启后检测图片中的广告内容（需启用AI检测）",
       "type": "boolean",
       "default": true
-    },
-    "image_detection_mode": {
-      "title": "图片检测模式",
-      "description": "选择图片检测的模式：ocr_only(仅OCR正则检测) 或 ocr_ai(OCR+AI检测)",
-      "type": "string",
-      "default": "ocr_only",
-      "enum": ["ocr_only", "ocr_ai"]
     },
     "enable_quote_detection": {
       "title": "启用引用消息检测",
@@ -51,17 +44,11 @@
       "type": "boolean",
       "default": false
     },
-    "text_ai_provider": {
-      "title": "文本AI提供商",
-      "description": "选择用于文本广告检测的AI提供商",
+    "ai_provider": {
+      "title": "AI提供商",
+      "description": "选择用于广告检测的AI提供商",
       "type": "string",
       "_special": "select_provider"
-    },
-    "ocr_languages": {
-      "title": "OCR识别语言",
-      "description": "OCR识别时使用的语言，格式为逗号分隔的语言代码，例如：ch_sim,en",
-      "type": "string",
-      "default": "ch_sim,en"
     },
     "regex_rules": {
       "title": "正则检测规则",

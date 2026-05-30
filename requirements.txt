@@ -1,5 +1,2 @@
 sqlalchemy
-easyocr
-pillow
-numpy
-requests
+httpx

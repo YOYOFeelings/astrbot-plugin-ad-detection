@@ -1,13 +1,10 @@
 import re
 import io
-import requests
-from typing import List, Optional, Tuple
+import base64
+from typing import List, Optional
 from astrbot.api.provider import Provider
 from astrbot.api.config import AstrBotConfig
 from astrbot.api.message import Message
-from PIL import Image
-import easyocr
-import numpy as np
 
 
 class DetectionResult:
@@ -22,16 +19,6 @@ class AdDetector:
         self.config = config
         self.llm_provider = llm_provider
         self.regex_rules = config.get("regex_rules", [])
-        self.ocr_reader = None
-        self._init_ocr()
-
-    def _init_ocr(self):
-        try:
-            lang_str = self.config.get("ocr_languages", "ch_sim,en")
-            langs = [lang.strip() for lang in lang_str.split(",") if lang.strip()]
-            self.ocr_reader = easyocr.Reader(langs, gpu=False)
-        except Exception:
-            self.ocr_reader = None
 
     async def detect_message(self, message: Message) -> DetectionResult:
         text_result = await self._detect_text_content(message)
@@ -107,43 +94,35 @@ class AdDetector:
         return DetectionResult(False)
 
     async def _detect_images(self, message: Message) -> DetectionResult:
-        if not self.ocr_reader:
+        if not self.config.get("enable_image_detection", True):
             return DetectionResult(False)
 
         images = self._extract_images(message)
         if not images:
             return DetectionResult(False)
 
-        for image_data in images:
+        if self.config.get("enable_text_ai_detection", False) and self.llm_provider:
             try:
-                image = Image.open(io.BytesIO(image_data))
-                image_np = np.array(image)
-                result = self.ocr_reader.readtext(image_np, detail=0)
-                ocr_text = " ".join(result)
+                for image_data in images:
+                    image_b64 = base64.b64encode(image_data).decode('utf-8')
+                    prompt = (
+                        "请判断这张图片中是否包含广告或违规推广信息。"
+                        "如果是广告，请回复'是广告'并在新行说明原因；"
+                        "如果不是，请仅回复'不是广告'。"
+                    )
 
-                if not ocr_text:
-                    continue
+                    response = await self.llm_provider.text_chat(prompt, image_base64=image_b64)
+                    response_text = response.get("text", "").strip()
 
-                if self.config.get("enable_regex_detection", True):
-                    regex_result = self._regex_detect(ocr_text)
-                    if regex_result.is_ad:
+                    if "是广告" in response_text:
+                        reason = response_text.split("是广告")[-1].strip()
                         return DetectionResult(
                             True,
-                            reason=f"图片OCR检测：{regex_result.reason}",
-                            detection_type="image_ocr"
-                        )
-
-                mode = self.config.get("image_detection_mode", "ocr_only")
-                if mode == "ocr_ai" and self.config.get("enable_text_ai_detection", False):
-                    ai_result = await self._text_ai_detect(ocr_text)
-                    if ai_result.is_ad:
-                        return DetectionResult(
-                            True,
-                            reason=f"图片OCR+AI检测：{ai_result.reason}",
-                            detection_type="image_ocr_ai"
+                            reason=f"图片AI检测：{reason if reason else '包含广告内容'}",
+                            detection_type="image_ai"
                         )
             except Exception:
-                continue
+                pass
 
         return DetectionResult(False)
 
@@ -176,7 +155,8 @@ class AdDetector:
 
     def _download_image(self, url: str) -> Optional[bytes]:
         try:
-            resp = requests.get(url, timeout=10)
+            import httpx
+            resp = httpx.get(url, timeout=10)
             resp.raise_for_status()
             return resp.content
         except Exception:

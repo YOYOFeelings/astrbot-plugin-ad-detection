@@ -1,6 +1,5 @@
 import os
 from astrbot.api.star import Star
-from astrbot.api.config import AstrBotConfig
 from astrbot.api.message import Message
 from .database import DatabaseManager
 from .detector import AdDetector
@@ -11,7 +10,7 @@ from .commands import CommandManager
 class AdDetection(Star):
     def __init__(self):
         super().__init__()
-        self.plugin_name = "astrbot-plugin-ad-detection"
+        self.plugin_name = "astrbot_plugin_ad_detection"
         self.db = None
         self.detector = None
         self.handler = None
@@ -26,9 +25,9 @@ class AdDetection(Star):
         
         llm_provider = None
         try:
-            text_provider_name = config.get("text_ai_provider")
-            if text_provider_name:
-                llm_provider = self.get_provider(text_provider_name)
+            provider_name = config.get("ai_provider")
+            if provider_name:
+                llm_provider = self.get_provider(provider_name)
         except Exception:
             pass
         
